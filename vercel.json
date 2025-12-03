@@ -3,10 +3,5 @@
   "devCommand": "next dev",
   "installCommand": "npm ci",
   "framework": "nextjs",
-  "outputDirectory": ".next",
-  "env": {
-    "FACEBOOK_ACCESS_TOKEN": "@facebook_access_token",
-    "WEBHOOK_VERIFY_TOKEN": "@webhook_verify_token",
-    "OPENAI_API_KEY": "@openai_api_key"
-  }
+  "outputDirectory": ".next"
 }
