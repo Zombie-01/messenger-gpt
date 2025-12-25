@@ -137,8 +137,7 @@ console.log(`
     → Create your own (any string you want)
 
   OPENAI_API_KEY
-    → Your OpenAI API key
-    → Get from: openai.com
+    → (Removed) OpenAI is no longer required for this chatbot
 
 ═══════════════════════════════════════════════════════════════════
 

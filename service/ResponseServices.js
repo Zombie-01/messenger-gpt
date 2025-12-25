@@ -1,77 +1,164 @@
-const { URL, URLSearchParams } = require("url")
-const config = require('../config')
-const { ResponseBody } = require('./responseBody')
-const { fetchArtists, fetchLearnMoreInfo } = require('./ArtService')
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args))
+const { URL, URLSearchParams } = require("url");
+const config = require("../config");
+const { ResponseBody } = require("./responseBody");
+const fetch = (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const cargoData = require("../data/cargoData");
+const subscriptions = require("../data/subscriptions");
+
 class ResponseService {
+  constructor() {
+    // in-memory state to track when a user was asked for goods ID
+    this.awaitingTracking = {};
+  }
 
-    handleReceivedMessage = async (body) => {
-        body.entry.forEach(async (entry) => {
-            entry.messaging.forEach(async (message) => {
-                if (message.postback.payload == config.postbackGetStarted) {            
-                  await this.sendGreeting(message.sender.id, config.welcomeMessage)
-                  await this.sendArtistCarousel(message.sender.id)
-                }   
-                if (message.postback.title == config.postbackLearnMore) {
-                    console.log(message)
-                    await this.sendArtistBio(message.sender.id, message.postback.payload)
-                }
-            })
-        })
+  handleReceivedMessage = async (body) => {
+    for (const entry of body.entry) {
+      for (const event of entry.messaging) {
+        const senderId = event.sender && event.sender.id;
+        if (!senderId) continue;
 
-    }
-    sendGreeting = async (senderId, message) => {
-        const responseBody = new ResponseBody()
-        await this.sendApi(config.urlMesseges, responseBody.greetingMessageBody(senderId, message))        
-    }
-    sendArtistCarousel = async (senderId) => {
-        const responseBody = new ResponseBody()
-        await this.updateTypingIndicator(senderId, true)
-        const artists = await fetchArtists()
-        console.log(responseBody.artistCarouselBody(senderId, artists))
-        await this.sendApi(config.urlMesseges, responseBody.artistCarouselBody(senderId, artists))
-        await this.updateTypingIndicator(senderId, false)
-    }
-    sendApi = async (apiUrl, body) => {
-        let url = new URL(apiUrl)
-            url.search = new URLSearchParams({
-              access_token: config.accessToken
-            })
-        let response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-          }).catch(err => console.log(err))
-          console.log(body)
-          if (response.ok) {
-            const responseJson = await response.json().catch(err => console.log(err))
-            console.log(responseJson)
-        } else {
-            // TODO() Handle Error
-          console.log(response)
+        // handle postback get started
+        if (
+          event.postback &&
+          event.postback.payload === config.postbackGetStarted
+        ) {
+          await this.sendText(
+            senderId,
+            'Сайн байна уу! Марал Карго руу тавтай морилно уу. Та "бараа шалгах" гэж бичээд ачааг шалгах боломжтой.'
+          );
+          continue;
         }
+
+        const text =
+          event.message && event.message.text ? event.message.text.trim() : "";
+        if (!text) continue;
+        const lower = text.toLowerCase();
+
+        // Cargo tracking triggers
+        if (
+          lower.includes("бараа шалгах") ||
+          lower.includes("ачаагаа шалгах") ||
+          lower === "бараа"
+        ) {
+          this.awaitingTracking[senderId] = true;
+          await this.sendText(senderId, "Та барааны дугаараа оруулна уу");
+          continue;
+        }
+
+        // If we previously asked for goods id, treat numeric or any input as id
+        if (this.awaitingTracking[senderId]) {
+          await this.handleTrackingLookup(senderId, text);
+          this.awaitingTracking[senderId] = false;
+          continue;
+        }
+
+        // Company info keywords
+        if (
+          lower.includes("хаяг") ||
+          lower.includes("байршил") ||
+          lower.includes("танай хаяг")
+        ) {
+          await this.sendText(
+            senderId,
+            "📍 Хаяг:\nЭрдэнэт хот, 4-р микр, 8-р байр"
+          );
+          continue;
+        }
+        if (
+          lower.includes("утас") ||
+          lower.includes("холбогдох дугаар") ||
+          lower.includes("дугаар")
+        ) {
+          await this.sendText(senderId, "☎️ Холбогдох утас:\n99611133");
+          continue;
+        }
+        if (
+          lower.includes("хятадаас бараа татдаг") ||
+          lower.includes("хятадаас ирдэг") ||
+          lower.includes("хятад ачаа")
+        ) {
+          await this.sendText(
+            senderId,
+            "🚚 Бид Хятадаас бараа татдаг.\n📦 Эрдэнэт хотруу ачаа тээвэрлэдэг."
+          );
+          continue;
+        }
+        if (lower.includes("мэдээлэл") || lower.includes("танайх")) {
+          await this.sendText(
+            senderId,
+            "📦 Марал Карго\n🚚 Хятадаас бараа татдаг\n📍 Эрдэнэт хотруу тээвэрлэдэг\n☎️ Утас: 99611133"
+          );
+          continue;
+        }
+
+        // If message looks like an id (only digits) handle lookup
+        if (/^\d+$/.test(text)) {
+          await this.handleTrackingLookup(senderId, text);
+          continue;
+        }
+
+        // fallback
+        await this.sendText(
+          senderId,
+          'Уучлаарай, би таныг ойлгосонгүй. Та "бараа шалгах" эсвэл "хаяг" гэх мэт командыг ашиглана уу.'
+        );
+      }
     }
-    updateTypingIndicator = async (senderId, isActive) => {
-        const responseBody = new ResponseBody()
-        await this.sendApi(config.urlMesseges, responseBody.typingIndicatorBody(senderId, isActive))
+  };
+
+  handleTrackingLookup = async (senderId, goodsId) => {
+    const found = cargoData.find(
+      (c) => c.goods_id === goodsId || c.goods_id === goodsId.trim()
+    );
+    if (found) {
+      // register the senderId as a subscriber for this goods id
+      try {
+        const id = found.goods_id;
+        subscriptions[id] = subscriptions[id] || [];
+        if (!subscriptions[id].includes(senderId))
+          subscriptions[id].push(senderId);
+      } catch (e) {
+        console.log("subscription error", e);
+      }
+
+      const message = `📦 Барааны дугаар: ${found.goods_id}  \n📍 Байршил: ${found.location}  \n🚚 Төлөв: ${found.status}  \n📅 Ирэх хугацаа: ${found.estimated_arrival}`;
+      await this.sendText(senderId, message);
+    } else {
+      await this.sendText(senderId, "Уучлаарай, ийм бараа олдсонгүй");
     }
-    sendArtistBio = async (senderId, artistName) => {
-        const responseBody = new ResponseBody()
-        await this.updateTypingIndicator(senderId, true)
-        const artistBio = await fetchLearnMoreInfo(artistName)
-        await this.sendApi(config.urlMesseges, responseBody.greetingMessageBody(senderId, artistBio))
-        await this.updateTypingIndicator(senderId, false)
+  };
+
+  sendText = async (senderId, message) => {
+    const responseBody = new ResponseBody();
+    await this.sendApi(
+      config.urlMesseges,
+      responseBody.greetingMessageBody(senderId, message)
+    );
+  };
+
+  sendApi = async (apiUrl, body) => {
+    let url = new URL(apiUrl);
+    url.search = new URLSearchParams({
+      access_token: config.accessToken,
+    });
+    let response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch((err) => console.log(err));
+    if (!response) return;
+    if (response.ok) {
+      try {
+        const responseJson = await response.json();
+        console.log(responseJson);
+      } catch (e) {
+        // ignore
+      }
+    } else {
+      console.log("Facebook API error", response.status);
     }
-    
-    getAttachmentId = async (senderId) => {
-        const responseBody = new ResponseBody()
-        await this.sendApi(config.urlMesseges, responseBody.uploadImageBody(senderId))
-    }
+  };
 }
 
-// const response = new ResponseBody()
-// const service = new ResponseService()
-// service.sendApi(config.urlProfile, response.getStartedBody())
-// service.sendApi(config.urlProfile, response.welcomeScreenBody())
-
-module.exports = { ResponseService }
+module.exports = { ResponseService };

@@ -7,5 +7,5 @@ module.exports = {
   postbackLearnMore: "Learn More",
   welcomeMessage:
     "Welcome to Classical Art! Which artist would you like to learn more about?",
-  chatGptKey: process.env.OPENAI_API_KEY || "",
+  // OpenAI key removed
 };

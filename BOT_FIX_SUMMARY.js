@@ -57,16 +57,16 @@ BEFORE:
   });
 
 AFTER:
-  for (const entry of body.entry) {
-    for (const message of entry.messaging) {
-      if (message.postback) { ... }
-      else if (message.message && message.message.text) {
-        const userMessage = message.message.text;
-        const response = await fetchLearnMoreInfo(userMessage);
-        await this.sendGreeting(senderId, response);
+   for (const entry of body.entry) {
+      for (const message of entry.messaging) {
+         if (message.postback) { ... }
+         else if (message.message && message.message.text) {
+            // Handle text message and generate a static/predefined response
+            const userMessage = message.message.text;
+            // e.g., lookup or keyword match and send reply
+         }
       }
-    }
-  }
+   }
 
 ═══════════════════════════════════════════════════════════════════
 
@@ -99,9 +99,9 @@ Facebook POST /api/webhook
       ↓
 Check message type:
   ├─ postback? → Handle button click
-  └─ text? → NEW! Send to OpenAI
+   └─ text? → NEW! Generate a static or predefined response
       ↓
-Get AI response
+Generate response (static)
       ↓
 Send back to user
       ↓
@@ -122,8 +122,8 @@ If errors:
 ✗ [ERROR] Facebook API error: 401 Unauthorized
    → Check FACEBOOK_ACCESS_TOKEN
 
-✗ [ERROR] OPENAI_API_KEY is not set
-   → Add to .env.local and restart
+✗ [ERROR] Configuration missing
+   → Check FACEBOOK_ACCESS_TOKEN and WEBHOOK_VERIFY_TOKEN
 
 ═══════════════════════════════════════════════════════════════════
 

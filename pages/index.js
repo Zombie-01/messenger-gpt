@@ -3,7 +3,7 @@ export default function Home() {
     <main style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.heading}>Classical Art Webhook</h1>
-        <p style={styles.subtitle}>Facebook Messenger ChatGPT Integration</p>
+        <p style={styles.subtitle}>Facebook Messenger chatbot (no AI)</p>
 
         <div style={styles.linksContainer}>
           <a href="/logs" style={styles.link}>
@@ -38,7 +38,7 @@ export default function Home() {
               <code style={styles.code}>FACEBOOK_ACCESS_TOKEN</code>
             </li>
             <li>
-              <code style={styles.code}>OPENAI_API_KEY</code>
+              <code style={styles.code}>OPENAI_API_KEY</code> (not required)
             </li>
             <li>
               <code style={styles.code}>WEBHOOK_VERIFY_TOKEN</code>
